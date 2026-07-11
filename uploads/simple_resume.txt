@@ -1,0 +1,19 @@
+John Doe
+Email: john.doe@example.com | Phone: 555-123-4567
+ 
+Objective
+Software engineer with 5 years of experience in backend development.
+ 
+Experience
+Senior Backend Engineer at TechCorp, 2021-Present. Built scalable microservices using Python and Go.
+Software Engineer at StartupX, 2019-2021. Developed REST APIs and improved database performance by 40%.
+ 
+Education
+B.S. in Computer Science, State University, 2019.
+ 
+Skills
+Python, Go, SQL, Docker, Kubernetes, AWS.
+ 
+Projects
+Built an open-source data pipeline tool used by over 500 developers.
+ 

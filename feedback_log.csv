@@ -1,0 +1,20 @@
+timestamp,user_input,bot_response,source,confidence,rating,comment
+2026-07-11T00:00:00+00:00,got any jokes for me,Sure!,intent_ml:joke,0.9,up,
+2026-07-11T11:06:21+00:00,how old are you ?,My own is 25!,intent_rule:age,1.000,down,my owner is 22! year old
+2026-07-11T11:07:44+00:00,it is a resume based question what is the name of the condidate?,"I'm a Chatbot, call me Chatbot",intent_rule:name,1.000,down,missed the resume part
+2026-07-11T11:09:44+00:00,what are skills are listed in the resume?,"I couldn't find a confident answer in the resume. Are you asking about the candidate's experience, education, skills, projects, or contact? Let me know which section to focus on.",document_followup,0.150,down,I am taking about the technical skills and skills are the some word
+2026-07-11T11:11:49+00:00,what is the primary programming language the condidate has in the resume?,"I couldn't find a confident answer in the resume. Are you asking about the candidate's experience, education, skills, projects, or contact? Let me know which section to focus on.",document_followup,0.150,down,condidate mention in technical skills languages python as primary programming language
+2026-07-11T11:12:42+00:00,project,"I couldn't find a confident answer in the resume. Are you asking about the candidate's experience, education, skills, projects, or contact? Let me know which section to focus on.",document_followup,0.000,down,project and projects are same key word to search about condidate project
+2026-07-11T11:15:00+00:00,summarize the resume and condidate datails,"I couldn't find a confident answer in the resume. Are you asking about the candidate's experience, education, skills, projects, or contact? Let me know which section to focus on.",document_followup,0.000,down,write a professional summary when user ask this type of questions
+2026-07-11T11:51:57+00:00,skills,"Skilled in Python, SQL, FastAPI, TensorFlow, and backend
+development, seeking opportunities in AI/ML and data-driven engineering roles. TECHNICAL SKILLS
+Languages  Python (primary), Java, JavaScript, SQL
+ML & AI  Data Preprocessing, Feature Engineering, Machine Learning models, NLP, Deep Learning, LLM, RAG
+Frameworks  Pandas, Numpy, TensorFlow/Keras, Scikit-learn, LangChain, FastAPI, Streamlit, SentenceTransformers
+Databases  MySQL, MongoDB, ChromaDB (vector store), VectorDB
+Tools  Git, GitHub, Jupyter, Power BI, Groq API, REST APIs AI Chatbot with Trained Intent Classifier & Document Q&A   Python • scikit-learn (TF-IDF + Naive Bayes) •
+PyPDF2/python-docx • Feedback-Driven Learning
+Built a hybrid chatbot combining a trained Naive Bayes intent classifier with TF-IDF document retrieval, letting users
+upload resumes/PDFs and get context-aware answers with clarifying follow-up questions. AI-Powered Civic Complaint Verification System   MobileNetV2 • TensorFlow/Keras • Python
+Achieved 95.99% accuracy and 95.96% F1-score using transfer learning with MobileNetV2. Customer Shopping Behavior Analysis   SQL • Python • Power BI Built end-to-end pipeline: Python cleaning (37 missing values) -> SQL aggregations -> PostgreSQL -> Power BI
+visualization.",document_qa,0.900,down,

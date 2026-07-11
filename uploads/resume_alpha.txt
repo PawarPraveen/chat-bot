@@ -1,0 +1,18 @@
+John Alpha
+Email: john.alpha@example.com | Phone: 555-100-0001
+
+Objective
+Software engineer focused on backend systems and cloud platforms.
+
+Experience
+Senior Backend Engineer at CloudWorks, 2022-Present. Built event-driven services with Python and AWS.
+Software Engineer at DataLabs, 2020-2022. Developed analytics APIs and data pipelines.
+
+Education
+B.S. in Computer Science, State University, 2020.
+
+Skills
+Python, AWS, Docker, SQL, Kafka.
+
+Projects
+Built an internal analytics dashboard used by 300+ employees.

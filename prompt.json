@@ -1,0 +1,84 @@
+{
+  "intents": [
+    {
+      "tag": "greetings",
+      "patterns": ["hello", "hi", "hey", "what's up", "whats up", "good morning", "good evening", "morning", "how's it going?", "how is it going?", "how are you?", "yo", "hiya"],
+      "responses": ["Hello!", "Hey!", "What can I do for you?", "Greeting, Human!"]
+    },
+    {
+      "tag": "goodbye",
+      "patterns": ["bye", "goodbye", "see you later", "see ya", "talk to you later", "catch you later", "i'm leaving", "gotta go"],
+      "responses": ["Goodbye! Have a great day.", "See you later!", "Bye! Come back anytime."]
+    },
+    {
+      "tag": "thanks",
+      "patterns": ["thanks", "thank you", "thx", "appreciate it", "thanks a lot", "much appreciated"],
+      "responses": ["You're welcome!", "Anytime!", "Happy to help!"]
+    },
+    {
+      "tag": "name",
+      "patterns": ["what's your name?", "can you tell me your name?", "what do i call you?", "who are you?"],
+      "responses": ["I'm a Chatbot, call me Chatbot", "you can call me Chatbot."]
+    },
+    {
+      "tag": "age",
+      "patterns": ["what's your age?", "How old are you?", "age?", "when were you created?"],
+      "responses": ["My own is 25!", "My owner is 25 years old!"]
+    },
+    {
+      "tag": "creator",
+      "patterns": ["who made you?", "who created you?", "who is your developer?", "who built you?"],
+      "responses": ["I was built by a developer who loves chatbots!", "A curious human developer created me."]
+    },
+    {
+      "tag": "capabilities",
+      "patterns": ["what can you do?", "help me", "help", "what do you do?", "how can you help me?", "what are your features?"],
+      "responses": ["I can chat with you, answer basic questions, and if you upload a resume or document, I can answer questions based on its content!", "Ask me something, or upload a document and I'll answer questions from it."]
+    },
+    {
+      "tag": "hours",
+      "patterns": ["what are your hours?", "when are you available?", "are you available 24/7?"],
+      "responses": ["I'm available 24/7, anytime you need me!"]
+    },
+    {
+      "tag": "weather",
+      "patterns": ["what's the weather like?", "is it raining?", "how's the weather today?"],
+      "responses": ["I can't check live weather yet, but I can help you with other things!"]
+    },
+    {
+      "tag": "joke",
+      "patterns": ["tell me a joke", "make me laugh", "say something funny", "know any jokes?"],
+      "responses": ["Why do programmers prefer dark mode? Because light attracts bugs!", "I told my computer I needed a break, and it said 'no problem, I'll go to sleep.'"]
+    },
+    {
+      "tag": "compliment",
+      "patterns": ["you're smart", "good job", "you're helpful", "impressive answer", "well done"],
+      "responses": ["Thank you, that means a lot!", "I appreciate that!"]
+    },
+    {
+      "tag": "insult",
+      "patterns": ["you're dumb", "you're useless", "you are stupid", "you're broken", "you never help"],
+      "responses": ["I'm sorry you feel that way, I'll try to do better.", "Let's keep things friendly — how can I help you?"]
+    },
+    {
+      "tag": "about",
+      "patterns": ["what are you?", "tell me about yourself", "what is this chatbot?"],
+      "responses": ["I'm a simple chatbot that can answer common questions and read documents you upload to answer questions about them."]
+    },
+    {
+      "tag": "contact",
+      "patterns": ["how can i contact support?", "is there a human i can talk to?", "contact information"],
+      "responses": ["You can reach our support team via the contact page, or ask me and I'll do my best to help!"]
+    },
+    {
+      "tag": "upload_document",
+      "patterns": ["i want to upload a resume", "can i upload a document?", "upload file", "here is my resume", "analyze my resume", "read this document", "upload my cv"],
+      "responses": ["Sure! Please upload your resume or document and I'll answer questions based on it."]
+    },
+    {
+      "tag": "fallback",
+      "patterns": [],
+      "responses": ["I'm not sure I understand. Could you rephrase that, or upload a document so I can help based on its content?"]
+    }
+  ]
+}

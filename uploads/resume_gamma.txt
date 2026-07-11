@@ -1,0 +1,18 @@
+Alex Gamma
+Email: alex.gamma@example.com | Phone: 555-100-0003
+
+Objective
+Product engineer with experience in full-stack development and user experience.
+
+Experience
+Frontend Engineer at ProductHub, 2020-Present. Built React dashboards and onboarding flows.
+Full Stack Developer at StartupOne, 2018-2020. Developed internal tools and APIs.
+
+Education
+B.S. in Information Systems, River College, 2018.
+
+Skills
+JavaScript, React, Node.js, PostgreSQL, GraphQL.
+
+Projects
+Led a redesign of the onboarding experience for a B2B SaaS platform.

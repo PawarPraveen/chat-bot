@@ -1,0 +1,18 @@
+Jane Beta
+Email: jane.beta@example.com | Phone: 555-100-0002
+
+Objective
+Data scientist interested in machine learning and experimentation.
+
+Experience
+Machine Learning Engineer at InsightCo, 2021-Present. Built recommendation models and MLOps pipelines.
+Research Assistant at University Lab, 2018-2021. Worked on NLP experiments.
+
+Education
+M.S. in Data Science, North State University, 2021.
+
+Skills
+Python, PyTorch, SQL, MLflow, Kubernetes.
+
+Projects
+Created a fraud detection model that reduced false positives by 25%.

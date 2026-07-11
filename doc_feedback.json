@@ -1,0 +1,72 @@
+{
+  "0a8bda42a771ef1d": {
+    "penalized": [
+      {
+        "query": "projects",
+        "chunk_index": 14
+      },
+      {
+        "query": "This candidate is a strong hire for a Senior Backend Engineer role, offering a high-impact blend of Python/Go expertise, proven database optimization skills (40% gain), and active open-source leadership. You should proceed to an interview to verify their specific system design ownership and ensure their architectural decisions match your scale requirements. Their trajectory from startup agility to senior corporate engineering suggests they can immediately contribute to building scalable microservices",
+        "chunk_index": 11
+      }
+    ],
+    "learned": []
+  },
+  "c2ace5197c1a321a": {
+    "penalized": [
+      {
+        "query": "Praveen Pawar is a high-potential AI/ML Engineer candidate with a strong academic record (8.01 CGPA) from Nitte Meenakshi Institute of Technology, where the 2025 CSE batch achieved an 86.84% placement rate with top offers reaching ~59 LPA. His portfolio demonstrates immediate practical value through LLM pipelines (91% accuracy) and Computer Vision models (95.99% accuracy) optimized for resource-constrained devices. Given his proven ability to build end-to-end systems using Python, TensorFlow, and FastAPI, he is an excellent fit for entry-level roles in Generative AI and Data Engineering.",
+        "chunk_index": 0
+      },
+      {
+        "query": "Praveen Pawar is a high-potential AI/ML Engineer candidate with a strong academic record (8.01 CGPA) from Nitte Meenakshi Institute of Technology, where the 2025 CSE batch achieved an 86.84% placement rate with top offers reaching ~59 LPA. His portfolio demonstrates immediate practical value through LLM pipelines (91% accuracy) and Computer Vision models (95.99% accuracy) optimized for resource-constrained devices. Given his proven ability to build end-to-end systems using Python, TensorFlow, and FastAPI, he is an excellent fit for entry-level roles in Generative AI and Data Engineering.",
+        "chunk_index": 1
+      },
+      {
+        "query": "Praveen Pawar is a high-potential AI/ML Engineer candidate with a strong academic record (8.01 CGPA) from Nitte Meenakshi Institute of Technology, where the 2025 CSE batch achieved an 86.84% placement rate with top offers reaching ~59 LPA. His portfolio demonstrates immediate practical value through LLM pipelines (91% accuracy) and Computer Vision models (95.99% accuracy) optimized for resource-constrained devices. Given his proven ability to build end-to-end systems using Python, TensorFlow, and FastAPI, he is an excellent fit for entry-level roles in Generative AI and Data Engineering.",
+        "chunk_index": 2
+      }
+    ],
+    "learned": []
+  },
+  "29be223259a455cb": {
+    "penalized": [],
+    "learned": [
+      {
+        "query": "What skills are listed?",
+        "answer": "Python, AWS, Docker, SQL, Kafka.",
+        "chunk_indices": [
+          11
+        ]
+      }
+    ]
+  },
+  "28131e367afb3706": {
+    "penalized": [],
+    "learned": [
+      {
+        "query": "What skills are listed?",
+        "answer": "Python, PyTorch, SQL, MLflow, Kubernetes.",
+        "chunk_indices": [
+          11
+        ]
+      }
+    ]
+  },
+  "02d146eddc09e3dc": {
+    "penalized": [],
+    "learned": [
+      {
+        "query": "What skills are listed?",
+        "answer": "JavaScript, React, Node.js, PostgreSQL, GraphQL.",
+        "chunk_indices": [
+          11
+        ]
+      }
+    ]
+  },
+  "7c313bbe06716628": {
+    "penalized": [],
+    "learned": []
+  }
+}

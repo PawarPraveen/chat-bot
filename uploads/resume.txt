@@ -1,0 +1,42 @@
+PRAVEEN PAWAR
+AI/ML Engineer • LLM Systems • Computer Vision • Data Analytics
+pawar.praveen775@gmail.com • +91 6360277363 • github.com/PawarPraveen • linkedin.com/in/praveenpawar • Bengaluru,
+India
+PROFESSIONAL SUMMARY
+Aspiring Computer Science engineer (CGPA 8.01) with experience building and deploying end-to-end AI/ML systems and
+data pipelines. Developed multilingual LLM pipelines achieving 91% extraction accuracy, computer vision models with
+95.99% accuracy, and analytics solutions using Power BI. Skilled in Python, SQL, FastAPI, TensorFlow, and backend
+development, seeking opportunities in AI/ML and data-driven engineering roles.
+TECHNICAL SKILLS
+Languages  Python (primary), Java, JavaScript, SQL
+ML & AI  Data Preprocessing, Feature Engineering, Machine Learning models, NLP, Deep Learning, LLM, RAG
+Frameworks  Pandas, Numpy, TensorFlow/Keras, Scikit-learn, LangChain, FastAPI, Streamlit, SentenceTransformers
+Databases  MySQL, MongoDB, ChromaDB (vector store), VectorDB
+Tools  Git, GitHub, Jupyter, Power BI, Groq API, REST APIs
+PROJECTS
+AI Chatbot with Trained Intent Classifier & Document Q&A   Python • scikit-learn (TF-IDF + Naive Bayes) •
+PyPDF2/python-docx • Feedback-Driven Learning
+Built a hybrid chatbot combining a trained Naive Bayes intent classifier with TF-IDF document retrieval, letting users
+upload resumes/PDFs and get context-aware answers with clarifying follow-up questions.
+Designed a human-in-the-loop feedback system where upvotes retrain the classifier in real time and downvotes
+suppress incorrect predictions, continuously improving accuracy without manual retraining.
+Implemented persistent, content-hash-keyed feedback for document Q&A so corrections carry across sessions, plus
+sandboxed file uploads and a 17-test automated regression suite.
+AI-Powered Civic Complaint Verification System   MobileNetV2 • TensorFlow/Keras • Python
+Achieved 95.99% accuracy and 95.96% F1-score using transfer learning with MobileNetV2.
+Reduced model size to 11.6 MB, enabling deployment on resource-constrained devices.
+Built a multimodal validation system combining image classification with text consistency checks.
+Automated complaint verification, significantly reducing manual review effort.
+Customer Shopping Behavior Analysis   SQL • Python • Power BI
+
+Analyzed 3,900 transactions across 12 categories, extracting 8+ insights: Young Adults $62,143, Males $157,890 vs.
+Females $75,191, 73% non-subscriber opportunity.
+Developed interactive Power BI dashboard with KPIs (3.9K customers, $59.76 avg, 27% subscription rate) and
+dynamic filters by demographics.
+Built end-to-end pipeline: Python cleaning (37 missing values) -> SQL aggregations -> PostgreSQL -> Power BI
+visualization.
+EDUCATION
+B.E. Computer Science
+Nitte Meenakshi Institute of Technology, Bengaluru   |   Dec 2022 – Jul 2026   |   CGPA: 8.01
+PUC (Karnataka State Board)
+Sri Veerendra Patil PU College, Kalaburagi   |   Aug 2020 – Apr 2022   |   82.18%
