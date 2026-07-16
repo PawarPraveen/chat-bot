@@ -27,6 +27,7 @@ import sys
 import csv
 import hashlib
 from datetime import datetime, timezone
+import importlib
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.metrics.pairwise import cosine_similarity
 from sklearn.naive_bayes import MultinomialNB
@@ -47,6 +48,10 @@ RESUME_TRAINING_DATA_PATH = os.path.join(BASE_DIR, "resume_training_data.json")
 # chatbot can't be pointed at arbitrary files elsewhere on disk.
 UPLOAD_DIR = os.path.join(BASE_DIR, "uploads")
 ALLOWED_UPLOAD_EXTENSIONS = {".txt", ".pdf", ".docx"}
+
+LLM_MODEL_PATH = os.environ.get("LLAMA_MODEL_PATH")
+LLM_MODEL_NAME = os.environ.get("LLM_MODEL_NAME", "meta-llama/Llama-2-7b-chat-hf")
+LLM_CONTEXT_MAX_CHARS = 2800
 
 SIMILARITY_THRESHOLD = 0.18          # doc QA: below this -> ask a follow-up instead of guessing
 INTENT_MATCH_MIN = 1                 # rule matcher: min overlapping keywords
@@ -157,6 +162,69 @@ def doc_hash(text):
     """Stable ID for a document's content, so feedback on it persists even
     if the same file gets re-uploaded in a later session."""
     return hashlib.sha256(text.encode("utf-8", errors="ignore")).hexdigest()[:16]
+
+
+class LocalLLM:
+    def __init__(self):
+        self.backend = None
+        self.model = None
+        self.pipeline = None
+        self.available = False
+        self._load_backend()
+
+    def _load_backend(self):
+        if importlib.util.find_spec("llama_cpp"):
+            try:
+                from llama_cpp import Llama
+                if not LLM_MODEL_PATH:
+                    return
+                if not os.path.isfile(LLM_MODEL_PATH):
+                    return
+                self.model = Llama(
+                    model_path=LLM_MODEL_PATH,
+                    n_threads=max(1, min(8, (os.cpu_count() or 1)))
+                )
+                self.backend = "llama_cpp"
+                self.available = True
+                return
+            except Exception:
+                self.available = False
+
+        if importlib.util.find_spec("transformers"):
+            try:
+                from transformers import pipeline
+                import torch
+                self.pipeline = pipeline(
+                    "text2text-generation",
+                    model=LLM_MODEL_NAME,
+                    tokenizer=LLM_MODEL_NAME,
+                    device=0 if torch.cuda.is_available() else -1,
+                )
+                self.backend = "transformers"
+                self.available = True
+                return
+            except Exception:
+                self.available = False
+
+    def generate(self, prompt, max_tokens=256, temperature=0.2):
+        if not self.available:
+            return None
+        try:
+            if self.backend == "llama_cpp":
+                response = self.model.create(
+                    prompt=prompt,
+                    max_tokens=max_tokens,
+                    temperature=temperature,
+                    top_p=0.95,
+                    stop=["\n\n"],
+                )
+                return response.choices[0].text.strip()
+            if self.backend == "transformers":
+                output = self.pipeline(prompt, max_new_tokens=max_tokens, do_sample=False)
+                return output[0]["generated_text"].strip()
+        except Exception:
+            return None
+        return None
 
 
 # ---------------------------------------------------------------------------
@@ -483,12 +551,13 @@ def guess_document_type(chunks):
 # ---------------------------------------------------------------------------
 
 class DocumentQA:
-    def __init__(self, text):
+    def __init__(self, text, llm=None):
         self.chunks = split_into_chunks(text)
         self.doc_type = guess_document_type(self.chunks)
         self.doc_id = doc_hash(text)
         self.vectorizer = TfidfVectorizer(stop_words="english")
         self.matrix = self.vectorizer.fit_transform(self.chunks) if self.chunks else None
+        self.llm = llm
 
         self._feedback_state = self._load_feedback_state()
         self.penalized = self._feedback_state["penalized"]
@@ -549,13 +618,10 @@ class DocumentQA:
             direct_answer = self._direct_resume_answer(question)
             if direct_answer is not None:
                 return direct_answer, 0.9, []
-            if tokens and not self._section_hint(question) and all(token not in full_text for token in tokens):
-                return ("I can try to answer that from the resume, but I’m not sure I can do it confidently. "
-                        "If you’d like, tell me how you’d like me to answer it and I’ll remember that style for next time."), 0.0, []
-            return None, best_score, []
-
-        section_hint = self._section_hint(question)
-        if section_hint:
+                if self.llm and self.llm.available:
+                    llm_answer = self._llm_answer(question)
+                    if llm_answer is not None:
+                        return llm_answer, 0.5, []
             section_index = None
             for idx in ranked:
                 chunk = self.chunks[int(idx)]
@@ -613,6 +679,30 @@ class DocumentQA:
             if skill_chunks:
                 return " ".join(skill_chunks)
 
+        return None
+
+    def _build_llm_prompt(self, question):
+        context = self._truncate_context("\n\n".join(self.chunks))
+        return (
+            "You are a helpful assistant that answers questions using only the information from the resume below. "
+            "If the answer is not present in the resume, reply that you cannot answer from the resume."
+            "\n\nResume:\n" + context + "\n\nQuestion: " + question + "\nAnswer:")
+
+    def _truncate_context(self, text):
+        if len(text) <= LLM_CONTEXT_MAX_CHARS:
+            return text
+        truncated = text[:LLM_CONTEXT_MAX_CHARS]
+        return truncated.rsplit(" ", 1)[0] + "\n..."
+
+    def _llm_answer(self, question):
+        if not self.llm or not self.llm.available:
+            return None
+        prompt = self._build_llm_prompt(question)
+        answer = self.llm.generate(prompt, max_tokens=256, temperature=0.2)
+        if answer:
+            answer = answer.strip()
+            if len(answer) > 10 and "I don't know" not in answer.lower():
+                return answer
         return None
 
     def _matching_training_example(self, question):
@@ -756,6 +846,7 @@ def main():
     classifier = IntentClassifier(INTENTS_PATH)
     matcher = IntentMatcher(INTENTS_PATH)
     feedback = FeedbackLogger(FEEDBACK_PATH)
+    llm = LocalLLM()
     doc_qa = None
     pending = None  # last {user_input, bot_response, source, confidence, chunk_indices} awaiting a rating
 
@@ -834,7 +925,7 @@ def main():
             try:
                 filepath = resolve_upload_path(requested)
                 text = load_document_text(filepath)
-                doc_qa = DocumentQA(text)
+                doc_qa = DocumentQA(text, llm=llm)
                 kind = "resume" if doc_qa.doc_type == "resume" else "document"
                 print(f"Chatbot: Got it — I've read your {kind} " f"({len(doc_qa.chunks)} sections parsed). Ask me anything about it!")
             except UploadError as e:
