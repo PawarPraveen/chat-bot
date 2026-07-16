@@ -88,6 +88,21 @@ folder:
 This prevents the chat command from being used to read arbitrary files
 elsewhere on the filesystem.
 
+## Local LLaMA support
+
+To enable local LLaMA-based resume answers, install one of the optional
+backends and set `LLAMA_MODEL_PATH` to your local model file:
+
+```bash
+pip install -r requirements.txt --break-system-packages
+set LLAMA_MODEL_PATH=C:\\models\\llama-2-7b-chat.Q4_K_M.gguf
+python chatbot.py
+```
+
+If `llama_cpp` is installed and `LLAMA_MODEL_PATH` points to a valid model,
+the bot will use it for document QA. Otherwise it falls back to retrieval-only
+resume responses.
+
 ## Testing
 
 ```bash

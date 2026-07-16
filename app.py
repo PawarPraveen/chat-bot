@@ -544,6 +544,23 @@ def guess_document_type(chunks):
     return "resume" if hits >= 2 else "document"
 
 
+def is_resume_question(text):
+    """Decide when a user query should be answered from the uploaded resume."""
+    if not text:
+        return False
+    q = text.lower()
+    keywords = [
+        "resume", "candidate", "summary", "project", "skills", "experience",
+        "education", "hire", "hiring", "matrix", "tech stack", "technology",
+        "stack", "about the candidate", "why should", "why hire", "explain this project",
+        "responsibilities", "achievements", "background", "work history",
+    ]
+    for keyword in keywords:
+        if keyword in q:
+            return True
+    return False
+
+
 # ---------------------------------------------------------------------------
 # Document Q&A engine (also grows/suppresses from feedback, persisted by
 # document content hash so re-uploading the same file remembers past
@@ -609,46 +626,57 @@ class DocumentQA:
         ranked = sims.argsort()[::-1]
 
         penalized_here = self._penalized_chunk_indices(question)
-        candidates = [int(i) for i in ranked if sims[i] >= SIMILARITY_THRESHOLD and i not in penalized_here]
+        candidates = [int(i) for i in ranked if i not in penalized_here]
 
-        if not candidates:
-            best_score = float(sims[ranked[0]]) if len(ranked) else 0.0
-            tokens = [t for t in tokenize_meaningful(question) if t not in STOPWORDS]
-            full_text = " ".join(self.chunks).lower()
+        if not candidates or sims[candidates[0]] < SIMILARITY_THRESHOLD:
             direct_answer = self._direct_resume_answer(question)
             if direct_answer is not None:
                 return direct_answer, 0.9, []
-                if self.llm and self.llm.available:
-                    llm_answer = self._llm_answer(question)
-                    if llm_answer is not None:
-                        return llm_answer, 0.5, []
-            section_index = None
-            for idx in ranked:
-                chunk = self.chunks[int(idx)]
-                chunk_text = chunk.lower()
-                if section_hint in chunk_text:
-                    section_index = int(idx)
-                    break
-            if section_index is None:
+
+            section_hint = self._section_hint(question)
+            if section_hint:
+                section_index = None
                 for idx, chunk in enumerate(self.chunks):
-                    if section_hint.lower() in chunk.lower():
+                    if section_hint in chunk.lower():
                         section_index = idx
                         break
-            if section_index is not None:
-                section_start = section_index + 1
-                section_end = len(self.chunks)
-                for candidate_idx in range(section_start, section_end):
-                    candidate_text = self.chunks[candidate_idx].lower()
-                    if candidate_text in {"experience", "education", "skills", "projects", "contact", "objective"}:
-                        section_end = candidate_idx
-                        break
-                content = " ".join(self.chunks[section_start:section_end]).strip()
-                if content:
-                    return content, float(sims[section_index]) if section_index < len(sims) else 1.0, [section_index]
+                if section_index is not None:
+                    section_start = section_index + 1
+                    section_end = len(self.chunks)
+                    for candidate_idx in range(section_start, section_end):
+                        candidate_text = self.chunks[candidate_idx].lower()
+                        if candidate_text in {"experience", "education", "skills", "projects", "contact", "objective"}:
+                            section_end = candidate_idx
+                            break
+                    content = " ".join(self.chunks[section_start:section_end]).strip()
+                    if content:
+                        if self.llm and self.llm.available:
+                            llm_answer = self._llm_answer(question, [content])
+                            if llm_answer is not None:
+                                return llm_answer, float(sims[candidates[0]]) if len(candidates) else 0.0, [section_index]
+                        return content, float(sims[candidates[0]]) if len(candidates) else 0.0, [section_index]
+
+            if len(ranked) and sims[ranked[0]] >= SIMILARITY_THRESHOLD * 0.7:
+                candidate_chunks = [self.chunks[int(ranked[i])] for i in range(min(top_k, len(ranked)))]
+                if self.llm and self.llm.available:
+                    llm_answer = self._llm_answer(question, candidate_chunks)
+                    if llm_answer is not None:
+                        return llm_answer, float(sims[candidates[0]]) if len(candidates) else 0.0, [int(ranked[0])]
+                return " ".join(candidate_chunks), float(sims[candidates[0]]) if len(candidates) else 0.0, [int(ranked[0])]
+
+            return ("I can try to answer that from the resume, but I’m not confident enough. "
+                    "Please ask a more specific resume question."), 0.0, []
 
         top_idx = candidates[:top_k]
         best_score = float(sims[top_idx[0]])
-        answer_text = " ".join(self.chunks[i] for i in top_idx if sims[i] >= SIMILARITY_THRESHOLD * 0.6)
+        selected_chunks = [self.chunks[i] for i in top_idx]
+
+        if self.llm and self.llm.available:
+            llm_answer = self._llm_answer(question, selected_chunks)
+            if llm_answer is not None:
+                return llm_answer, best_score, top_idx
+
+        answer_text = " ".join(selected_chunks)
         return answer_text, best_score, top_idx
 
     def _direct_resume_answer(self, question):
@@ -681,11 +709,12 @@ class DocumentQA:
 
         return None
 
-    def _build_llm_prompt(self, question):
-        context = self._truncate_context("\n\n".join(self.chunks))
+    def _build_llm_prompt(self, question, chunks):
+        context = self._truncate_context("\n\n".join(chunks))
         return (
             "You are a helpful assistant that answers questions using only the information from the resume below. "
-            "If the answer is not present in the resume, reply that you cannot answer from the resume."
+            "If the answer is not present in the resume, reply that you cannot answer from the resume. "
+            "Do not explain how you found the answer or mention retrieval details."
             "\n\nResume:\n" + context + "\n\nQuestion: " + question + "\nAnswer:")
 
     def _truncate_context(self, text):
@@ -694,14 +723,14 @@ class DocumentQA:
         truncated = text[:LLM_CONTEXT_MAX_CHARS]
         return truncated.rsplit(" ", 1)[0] + "\n..."
 
-    def _llm_answer(self, question):
+    def _llm_answer(self, question, chunks):
         if not self.llm or not self.llm.available:
             return None
-        prompt = self._build_llm_prompt(question)
+        prompt = self._build_llm_prompt(question, chunks)
         answer = self.llm.generate(prompt, max_tokens=256, temperature=0.2)
         if answer:
             answer = answer.strip()
-            if len(answer) > 10 and "I don't know" not in answer.lower():
+            if len(answer) > 10 and "i cannot" not in answer.lower() and "i don't know" not in answer.lower():
                 return answer
         return None
 
@@ -847,6 +876,8 @@ def main():
     matcher = IntentMatcher(INTENTS_PATH)
     feedback = FeedbackLogger(FEEDBACK_PATH)
     llm = LocalLLM()
+    if not llm.available:
+        print("Chatbot: Local LLM backend not available — resume answers will use retrieval-only fallback.")
     doc_qa = None
     pending = None  # last {user_input, bot_response, source, confidence, chunk_indices} awaiting a rating
 
@@ -934,7 +965,14 @@ def main():
                 print(f"Chatbot: Sorry, I couldn't read that file. ({e})")
             continue
 
-        # --- 1. Trained ML classifier (grows/shrinks from feedback) ---
+        # --- 1. Prefer document QA for clearly resume-related questions ---
+        if doc_qa and is_resume_question(user_input):
+            answer, score, chunk_indices = doc_qa.answer(user_input)
+            if answer:
+                reply(answer, source="document_qa", confidence=float(score), chunk_indices=chunk_indices)
+                continue
+
+        # --- 2. Trained ML classifier (grows/shrinks from feedback) ---
         tag, confidence, ambiguous_with = classifier.predict(user_input)
         if ambiguous_with:
             # Not stored as `pending` for a y/n rating -- there's no single
@@ -945,7 +983,7 @@ def main():
             reply(classifier.responses_for(tag)[0], source=f"intent_ml:{tag}", confidence=confidence)
             continue
 
-        # --- 2. Rule-based safety net (static, unaffected by feedback) ---
+        # --- 3. Rule-based safety net (static, unaffected by feedback) ---
         tag, responses = matcher.match(user_input)
         if tag:
             reply(responses[0], source=f"intent_rule:{tag}", confidence=1.0)
