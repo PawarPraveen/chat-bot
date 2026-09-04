@@ -1,0 +1,7 @@
+.venv/
+__pycache__/
+*.py[cod]
+feedback_log.csv
+doc_feedback.json
+learned_patterns.json
+negative_examples.json
