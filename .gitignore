@@ -2,6 +2,7 @@
 __pycache__/
 *.py[cod]
 feedback_log.csv
+feedback_log.json
 doc_feedback.json
 learned_patterns.json
 negative_examples.json

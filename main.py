@@ -13,6 +13,11 @@ Pipeline:
      model; cache the embeddings for the session.
   4. The LLM agent calls a retrieval tool that does cosine-similarity search
      over the cached embeddings to ground every answer in the real document.
+  5. Feedback loop: recruiters mark answers correct/incorrect after each
+     response. Incorrect answers are persisted to disk with corrections, and
+     future semantically-similar queries get warned via an injected prompt
+     hint — an LLM-native equivalent of the original TF-IDF chatbot's
+     upvote/downvote retraining loop (in-context correction, not retraining).
 
 This is RAG-*shaped* (parse -> chunk -> embed -> retrieve -> ground) but
 intentionally lightweight: no persistent vector database, single document,
@@ -34,7 +39,11 @@ Run:
     python main.py
 """
 
+import json
+import os
 import re
+import subprocess
+import time
 from pathlib import Path
 
 import numpy as np
@@ -56,18 +65,20 @@ from langchain_core.tools import tool
 #   "ollama"  — fully local, free, offline, no API key at all. Needs Ollama
 #               running locally with a tool-calling-capable model pulled.
 # ---------------------------------------------------------------------------
-BACKEND = "ollama"   # "openai" | "groq" | "ollama"
+BACKEND = os.environ.get("CHATBOT_BACKEND", "ollama")
 
 OPENAI_MODEL_NAME = "gpt-4o-mini"
 GROQ_MODEL_NAME = "llama-3.3-70b-versatile"   # confirmed tool-calling support
-OLLAMA_MODEL_NAME = "llama3.1"                # must be a tool-calling-capable pull
-
+OLLAMA_MODEL_NAME = os.environ.get("OLLAMA_MODEL_NAME", "llama3.1:8b")
 EMBEDDING_MODEL_NAME = "all-MiniLM-L6-v2"      # local sentence-transformer, runs offline
 TOP_K = 3                                      # how many chunks to retrieve per query
 MIN_SIMILARITY = 0.2                           # relevance floor to filter out noise
 
 SUPPORTED_EXTENSIONS = {".pdf", ".docx", ".txt"}
 UPLOAD_DIR = Path(__file__).resolve().parent / "uploads"
+FEEDBACK_PATH = Path(__file__).resolve().parent / "feedback_log.json"
+
+FEEDBACK_SIMILARITY_THRESHOLD = 0.55  # only surface corrections for genuinely similar past queries
 
 
 # ---------------------------------------------------------------------------
@@ -82,8 +93,42 @@ def _safe_resolve(file_path: str) -> Path:
     if UPLOAD_DIR.resolve() not in candidate.parents and candidate != UPLOAD_DIR.resolve():
         raise ValueError("Invalid file path — outside the allowed upload directory.")
     if candidate.suffix.lower() not in SUPPORTED_EXTENSIONS:
-        raise ValueError(f"Unsupported file type: {candidate.suffix}. Use .pdf or .docx.")
+        raise ValueError(f"Unsupported file type: {candidate.suffix}. Use .pdf, .docx, or .txt.")
     return candidate
+
+
+def print_help() -> None:
+    print("Commands: upload <filename>, help, quit")
+    print(f"Place resumes in: {UPLOAD_DIR}")
+
+
+def chunk_plain_text_resume(path: Path) -> list[dict]:
+    """Read TXT resumes directly without Unstructured or libmagic."""
+    text = path.read_text(encoding="utf-8", errors="ignore")
+    if not text.strip():
+        return []
+
+    chunks: list[dict] = []
+    current_section = "general"
+    section_names = {
+        "summary", "objective", "profile", "experience", "education",
+        "skills", "projects", "certifications", "contact", "achievements",
+    }
+
+    for line in text.splitlines():
+        line = line.strip()
+        if not line:
+            continue
+        normalized = re.sub(r"[^a-z ]", "", line.lower()).strip()
+        if normalized in section_names:
+            current_section = normalized
+            continue
+        for sentence in re.split(r"(?<=[.!?])\s+", line):
+            sentence = sentence.strip()
+            if len(sentence) > 3:
+                chunks.append({"section": current_section, "text": sentence})
+
+    return chunks
 
 
 # ---------------------------------------------------------------------------
@@ -122,11 +167,6 @@ def chunk_resume_with_unstructured(path: Path) -> list[dict]:
     return chunks
 
 
-def print_help() -> None:
-    print("Commands: upload <filename>, help, quit")
-    print(f"Place PDF, DOCX, or TXT resumes in: {UPLOAD_DIR}")
-
-
 # ---------------------------------------------------------------------------
 # 3. Embedding index — computed ONCE per resume, cached in memory
 # ---------------------------------------------------------------------------
@@ -149,7 +189,10 @@ def load_and_index_resume(file_path: str) -> int:
     if not path.exists():
         raise FileNotFoundError(f"No such file: {path.name}")
 
-    _RESUME_CHUNKS = chunk_resume_with_unstructured(path)
+    if path.suffix.lower() == ".txt":
+        _RESUME_CHUNKS = chunk_plain_text_resume(path)
+    else:
+        _RESUME_CHUNKS = chunk_resume_with_unstructured(path)
 
     if not _RESUME_CHUNKS:
         _CHUNK_EMBEDDINGS = None
@@ -202,6 +245,107 @@ TOOL_REGISTRY = {t.name: t for t in TOOLS}
 
 
 # ---------------------------------------------------------------------------
+# 4b. Feedback loop — LLM-native equivalent of the original TF-IDF chatbot's
+#     self-improving feedback loop.
+#
+#     The original project retrained a classifier on upvoted/downvoted
+#     examples. There's no equivalent "retrain the weights" step for an LLM
+#     you don't own (or even a local one, cheaply) — so instead this logs
+#     recruiter corrections permanently to disk, and on every new query,
+#     retrieves any *semantically similar* past correction using the same
+#     embedding-similarity approach as search_resume, then injects it into
+#     the prompt as a hint. This is in-context learning from feedback, not
+#     retraining — an honest, different mechanism for a similar goal.
+# ---------------------------------------------------------------------------
+
+_FEEDBACK_LOG: list[dict] = []                    # [{"query", "answer", "was_correct", "correction", "timestamp"}]
+_FEEDBACK_EMBEDDINGS: np.ndarray | None = None     # embeddings of the QUERY field, only for incorrect entries
+
+
+def _load_feedback_log() -> None:
+    """Load prior feedback from disk, if any, and rebuild the embedding
+    index for past-incorrect queries so lookups work immediately."""
+    global _FEEDBACK_LOG, _FEEDBACK_EMBEDDINGS
+
+    if FEEDBACK_PATH.exists():
+        with open(FEEDBACK_PATH, "r", encoding="utf-8") as f:
+            _FEEDBACK_LOG = json.load(f)
+    else:
+        _FEEDBACK_LOG = []
+
+    _rebuild_feedback_index()
+
+
+def _rebuild_feedback_index() -> None:
+    """Recompute embeddings for every logged query that was marked
+    incorrect (those are the ones worth warning future queries about)."""
+    global _FEEDBACK_EMBEDDINGS
+
+    incorrect_entries = [e for e in _FEEDBACK_LOG if not e["was_correct"]]
+    if not incorrect_entries:
+        _FEEDBACK_EMBEDDINGS = None
+        return
+
+    queries = [e["query"] for e in incorrect_entries]
+    _FEEDBACK_EMBEDDINGS = _embedder.encode(
+        queries, convert_to_numpy=True, normalize_embeddings=True
+    )
+
+
+def log_feedback(query: str, answer: str, was_correct: bool, correction: str | None = None) -> None:
+    """
+    Record a recruiter's feedback on an answer and persist it to disk.
+
+    was_correct=False entries become searchable "past mistakes" that future,
+    similar queries get warned about before the LLM answers again.
+    """
+    entry = {
+        "query": query,
+        "answer": answer,
+        "was_correct": was_correct,
+        "correction": correction,
+        "timestamp": time.strftime("%Y-%m-%d %H:%M:%S"),
+    }
+    _FEEDBACK_LOG.append(entry)
+
+    with open(FEEDBACK_PATH, "w", encoding="utf-8") as f:
+        json.dump(_FEEDBACK_LOG, f, indent=2)
+
+    _rebuild_feedback_index()  # keep the lookup index in sync immediately
+
+
+def check_past_corrections(query: str) -> str | None:
+    """
+    Look up whether a semantically similar query was previously answered
+    incorrectly. Returns a hint string to inject into the prompt, or None
+    if nothing sufficiently similar was found.
+    """
+    if _FEEDBACK_EMBEDDINGS is None:
+        return None
+
+    incorrect_entries = [e for e in _FEEDBACK_LOG if not e["was_correct"]]
+    query_embedding = _embedder.encode(
+        [query], convert_to_numpy=True, normalize_embeddings=True
+    )[0]
+
+    similarities = _FEEDBACK_EMBEDDINGS @ query_embedding
+    best_idx = int(np.argmax(similarities))
+    best_score = similarities[best_idx]
+
+    if best_score < FEEDBACK_SIMILARITY_THRESHOLD:
+        return None
+
+    past = incorrect_entries[best_idx]
+    hint = (
+        f"Note: a previous, similarly-phrased question (\"{past['query']}\") "
+        f"was answered incorrectly before: \"{past['answer']}\"."
+    )
+    if past.get("correction"):
+        hint += f" The correct answer was: \"{past['correction']}\"."
+    return hint
+
+
+# ---------------------------------------------------------------------------
 # 5. System prompt
 # ---------------------------------------------------------------------------
 
@@ -240,6 +384,20 @@ def _init_llm():
         from langchain_groq import ChatGroq
         return ChatGroq(model=GROQ_MODEL_NAME, temperature=0.0)
     elif BACKEND == "ollama":
+        try:
+            result = subprocess.run(
+                ["ollama", "show", OLLAMA_MODEL_NAME],
+                capture_output=True,
+                text=True,
+                timeout=10,
+            )
+        except (FileNotFoundError, subprocess.TimeoutExpired) as exc:
+            raise RuntimeError("Ollama is not running or is not installed. Start Ollama, then try again.") from exc
+        if result.returncode != 0:
+            raise RuntimeError(
+                f"Ollama model '{OLLAMA_MODEL_NAME}' is not installed. "
+                f"Run: ollama pull {OLLAMA_MODEL_NAME}"
+            )
         from langchain_ollama import ChatOllama
         return ChatOllama(model=OLLAMA_MODEL_NAME, temperature=0.0)
     else:
@@ -250,10 +408,13 @@ def run_hr_assistant(user_message: str, max_tool_calls: int = 6) -> str:
     llm = _init_llm()
     llm_with_tools = llm.bind_tools(TOOLS)
 
-    messages = [
-        SystemMessage(content=SYSTEM_PROMPT),
-        HumanMessage(content=user_message),
-    ]
+    messages = [SystemMessage(content=SYSTEM_PROMPT)]
+
+    correction_hint = check_past_corrections(user_message)
+    if correction_hint:
+        messages.append(SystemMessage(content=correction_hint))
+
+    messages.append(HumanMessage(content=user_message))
 
     tool_call_count = 0
 
@@ -293,7 +454,7 @@ if __name__ == "__main__":
     if len(sys.argv) > 1:
         try:
             num_chunks = load_and_index_resume(sys.argv[1])
-            print(f"Indexed resume into {num_chunks} chunk(s).\n")
+            print(f"Resume loaded. I indexed {num_chunks} section(s).")
         except (ValueError, FileNotFoundError) as exc:
             print(f"Error: {exc}")
             sys.exit(1)
@@ -301,36 +462,42 @@ if __name__ == "__main__":
         print("HR Resume Assistant. Type 'upload <filename>' to load a resume.")
         print_help()
 
+    _load_feedback_log()
+    print(f"Loaded {len(_FEEDBACK_LOG)} past feedback entr{'y' if len(_FEEDBACK_LOG) == 1 else 'ies'}.\n")
+
     while True:
-        try:
-            user_input = input("You: ").strip()
-        except (EOFError, KeyboardInterrupt):
-            print("\nGoodbye!")
+        q = input("You: ").strip()
+        if q.lower() in ("quit", "exit"):
             break
-
-        if not user_input:
+        if not q:
             continue
-        command, _, argument = user_input.partition(" ")
-        command = command.lower()
 
-        if command in {"quit", "exit"}:
-            print("Goodbye!")
-            break
-        if command == "help":
+        command, _, argument = q.partition(" ")
+        if command.lower() == "help":
             print_help()
             continue
-        if command == "upload":
+        if command.lower() == "upload":
             try:
                 num_chunks = load_and_index_resume(argument.strip())
-                if num_chunks:
-                    print(f"Resume loaded. I indexed {num_chunks} sections. Ask your question.")
-                else:
-                    print("The resume did not contain readable text.")
+                print(f"Resume loaded. I indexed {num_chunks} section(s).")
             except (ValueError, FileNotFoundError) as exc:
                 print(f"Error: {exc}")
             continue
 
         try:
-            print(f"Assistant: {run_hr_assistant(user_input)}")
+            answer = run_hr_assistant(q)
         except Exception as exc:
             print(f"Assistant: I could not answer that. {exc}")
+            continue
+        print("Assistant:", answer)
+
+        # --- Feedback capture: the interactive equivalent of your original
+        #     project's upvote/downvote buttons ---
+        verdict = input("Was this correct? (y/n/skip): ").strip().lower()
+        if verdict == "y":
+            log_feedback(q, answer, was_correct=True)
+        elif verdict == "n":
+            correction = input("What's the correct answer? (optional, Enter to skip): ").strip()
+            log_feedback(q, answer, was_correct=False, correction=correction or None)
+            print("Logged — future similar questions will be flagged with this correction.")
+        print()
